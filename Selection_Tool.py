@@ -78,6 +78,8 @@ class Selection:
         self.canvas.bind("<ButtonPress-1>", self.start_drag)
         self.canvas.bind("<B1-Motion>", self.drag)
         self.canvas.bind("<ButtonRelease-1>", self.end_drag)
+        self.master.bind("<Control-z>", self.undo_last_box)
+        self.master.bind("b", self.toggle_draw_mode_key)
 
         self.master.mainloop()
 
@@ -153,6 +155,12 @@ class Selection:
             self.zoom_y = max(0, min(zoom_center_y - self.canvas_height / (2 * self.zoom_factor), self.canvas_height - self.canvas_height / self.zoom_factor))
 
             self.refresh_image()
+
+    def undo_last_box(self, event=None):
+        self.remove_last_bounding_box()
+
+    def toggle_draw_mode_key(self, event=None):
+        self.toggle_draw_mode()
 
     def start_drag(self, event):
         self.drag_start_x = event.x
@@ -234,7 +242,6 @@ class Selection:
             self.class_selection_window.withdraw()  # Hide the window
         else:
             messagebox.showerror("Error", "Please select a class from the list.")
-
 
     def load_classes(self):
         try:
