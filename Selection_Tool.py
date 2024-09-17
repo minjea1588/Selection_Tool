@@ -192,7 +192,6 @@ class Selection:
         y = (self.zoom_y + event.y / self.zoom_factor) / self.canvas_height
 
         self.current_box.append((x, y))
-        self.class_name = None
         # Draw point on canvas
         canvas_x = int((x * self.canvas_width - self.zoom_x) * self.zoom_factor)
         canvas_y = int((y * self.canvas_height - self.zoom_y) * self.zoom_factor)
@@ -202,30 +201,36 @@ class Selection:
             self.draw_mode = False  # Deactivate draw mode after completing the box
             self.canvas.config(cursor="arrow")
             self.draw_box_button.config(relief="raised")
-
-            if self.yaml_loaded:
-                self.show_class_selection_window()
-            else:
-                self.class_name = simpledialog.askstring("Input", "Enter class name for this bounding box:")
-
-            if self.class_name:
-                if self.class_name not in self.class_colors:
-                    self.class_colors[self.class_name] = self.get_random_color()
-                
-                if self.rectangular_mode.get():
-                    # Convert to rectangular bounding box
-                    x_coords, y_coords = zip(*self.current_box)
-                    x_min, x_max = min(x_coords), max(x_coords)
-                    y_min, y_max = min(y_coords), max(y_coords)
-                    self.current_box = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
-                
-                self.bounding_boxes.append((self.current_box, self.class_name))
-                self.draw_bounding_box(self.current_box, self.class_name)
-                self.current_box = []
-                if self.yaml_loaded:
-                    self.class_combo.set('')  # Clear the combo box selection
-        elif len(self.current_box) > 4:
+            self.process_completed_box()
+        if len(self.current_box) > 4:
             self.current_box = []
+
+    def process_completed_box(self):
+        if self.yaml_loaded:
+            self.show_class_selection_window()
+            self.master.wait_window(self.class_selection_window)
+        else:
+            self.class_name = simpledialog.askstring("Input", "Enter class name for this bounding box:")
+
+        if self.class_name:
+            if self.class_name not in self.class_colors:
+                self.class_colors[self.class_name] = self.get_random_color()
+            
+            if self.rectangular_mode.get():
+                # Convert to rectangular bounding box
+                x_coords, y_coords = zip(*self.current_box)
+                x_min, x_max = min(x_coords), max(x_coords)
+                y_min, y_max = min(y_coords), max(y_coords)
+                self.current_box = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
+            
+            self.bounding_boxes.append((self.current_box, self.class_name))
+            self.draw_bounding_box(self.current_box, self.class_name)
+            self.current_box = []
+            if self.yaml_loaded:
+                self.class_combo.set('')  # Clear the combo box selection
+        else:
+            self.current_box = []  # Reset the current box if no class name was provided
+
 
     def show_class_selection_window(self):
         self.class_selection_combobox.config(values=self.classes)
@@ -233,13 +238,13 @@ class Selection:
         self.class_selection_window.deiconify()  # Show the window
         self.class_selection_window.lift()  # Bring the window to the front
         self.class_selection_window.focus_force()  # Force focus on the window
-        self.master.wait_window(self.class_selection_window)  # Wait for the window to close
+
 
     def on_class_select(self):
         self.class_name = self.class_selection_combobox.get()
         if self.class_name:
             messagebox.showinfo("Class Selected", f"You selected: {self.class_name}")
-            self.class_selection_window.withdraw()  # Hide the window
+            self.class_selection_window.destroy()  # Hide the window
         else:
             messagebox.showerror("Error", "Please select a class from the list.")
 
