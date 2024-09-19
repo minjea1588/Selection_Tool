@@ -4,6 +4,7 @@ from PIL import Image, ImageTk
 import json
 import yaml
 import random
+import re
 
 class Selection:
     def __init__(self):
@@ -40,6 +41,7 @@ class Selection:
         self.yaml_loaded = False  # Flag to track if YAML file is loaded
         self.class_colors = {}  # Dictionary to store class colors
 
+
         # Setup class combo box
         self.class_combo = ttk.Combobox(self.master, values=self.classes, state="readonly")
 
@@ -61,15 +63,7 @@ class Selection:
         self.dragging = False
 
         # Create a Toplevel window for class selection
-        self.class_selection_window = tk.Toplevel(self.master)
-        self.class_selection_window.withdraw()  # Hide the window initially
-        self.class_selection_window.title("Select Class")
-        self.class_selection_label = tk.Label(self.class_selection_window, text="Select a class:")
-        self.class_selection_label.pack(pady=10)
-        self.class_selection_combobox = ttk.Combobox(self.class_selection_window, values=self.classes, state="readonly")
-        self.class_selection_combobox.pack(pady=10)
-        self.class_selection_button = tk.Button(self.class_selection_window, text="Select", command=self.on_class_select)
-        self.class_selection_button.pack(pady=10)
+        self.class_selection_create()
 
         # Bind mouse events
         self.canvas.bind("<MouseWheel>", self.on_mouse_wheel)
@@ -82,6 +76,17 @@ class Selection:
         self.master.bind("b", self.toggle_draw_mode_key)
 
         self.master.mainloop()
+
+    def class_selection_create(self):
+        self.class_selection_window = tk.Toplevel(self.master)
+        self.class_selection_window.withdraw()  # Hide the window initially
+        self.class_selection_window.title("Select Class")
+        self.class_selection_label = tk.Label(self.class_selection_window, text="Select a class:")
+        self.class_selection_label.pack(pady=10)
+        self.class_selection_combobox = ttk.Combobox(self.class_selection_window, values=self.classes, state="readonly")
+        self.class_selection_combobox.pack(pady=10)
+        self.class_selection_button = tk.Button(self.class_selection_window, text="Select", command=self.on_class_select)
+        self.class_selection_button.pack(pady=10)
 
     def upload_image(self):
         self.image_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])
@@ -208,6 +213,7 @@ class Selection:
     def process_completed_box(self):
         if self.yaml_loaded:
             self.show_class_selection_window()
+            self.isfirst_combo = False
             self.master.wait_window(self.class_selection_window)
         else:
             self.class_name = simpledialog.askstring("Input", "Enter class name for this bounding box:")
@@ -232,8 +238,9 @@ class Selection:
             self.current_box = []  # Reset the current box if no class name was provided
 
 
-    def show_class_selection_window(self):
+    def show_class_selection_window(self):        
         self.class_selection_combobox.config(values=self.classes)
+        self.isfirst_combo = False
         self.class_selection_combobox.set('')
         self.class_selection_window.deiconify()  # Show the window
         self.class_selection_window.lift()  # Bring the window to the front
@@ -244,7 +251,8 @@ class Selection:
         self.class_name = self.class_selection_combobox.get()
         if self.class_name:
             messagebox.showinfo("Class Selected", f"You selected: {self.class_name}")
-            self.class_selection_window.destroy()  # Hide the window
+            self.class_selection_window.destroy()
+            self.class_selection_create()  # destroy and reduce
         else:
             messagebox.showerror("Error", "Please select a class from the list.")
 
@@ -288,20 +296,28 @@ class Selection:
         if self.bounding_boxes:
             self.bounding_boxes.pop()
             self.refresh_image()
-            messagebox.showinfo("Success", "Last bounding box removed.")
         else:
             messagebox.showwarning("Warning", "No bounding boxes to remove.")
 
     def save_to_json(self):
-            bounding_boxes_data = [
-                {"points": box, "class": class_name}
-                for box, class_name in self.bounding_boxes
-            ]
-            
-            with open("bounding_boxes.json", "w") as f:
-                json.dump(bounding_boxes_data, f, indent=4)
+        canvas_width, canvas_height = self.canvas.winfo_width(), self.canvas.winfo_height()
+        width_scaling_factor = self.img_width / canvas_width
+        height_scaling_factor = self.img_height / canvas_height
+        bounding_boxes_data = []
+        for box, class_name in self.bounding_boxes:
+            rescaled_box = []
+            for x, y in box:
+                rescaled_x = int(x * width_scaling_factor)
+                rescaled_y = int(y * height_scaling_factor)
+                rescaled_box.append((rescaled_x, rescaled_y))
+            bounding_boxes_data.append(
+                {"points": rescaled_box, "class": class_name}
+            )
+        save_filename = re.sub(r'\.(jpg|jpeg|png)$', '', self.image_path, flags=re.IGNORECASE)
+        with open(f"{save_filename}_bounding_boxes.json", "w") as f:
+            json.dump(bounding_boxes_data, f, indent=4)
 
-            messagebox.showinfo("Success", "Bounding boxes saved to bounding_boxes.json")
+        messagebox.showinfo("Success", "Bounding boxes saved to bounding_boxes.json")
 
     def toggle_draw_mode(self):
         self.draw_mode = not self.draw_mode
