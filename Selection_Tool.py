@@ -34,6 +34,7 @@ class Selection:
         self.canvas_image = None
         self.bounding_boxes = []
         self.current_box = []
+        self.canvas_box = []
         self.img_width = 0
         self.img_height = 0
         self.draw_mode = False  # Initialize draw mode to False
@@ -196,7 +197,8 @@ class Selection:
         x = (self.zoom_x + event.x / self.zoom_factor) / self.canvas_width
         y = (self.zoom_y + event.y / self.zoom_factor) / self.canvas_height
 
-        self.current_box.append((x, y))
+        self.current_box.append((event.x, event.y))
+        self.canvas_box.append((x,y))
         # Draw point on canvas
         canvas_x = int((x * self.canvas_width - self.zoom_x) * self.zoom_factor)
         canvas_y = int((y * self.canvas_height - self.zoom_y) * self.zoom_factor)
@@ -209,6 +211,7 @@ class Selection:
             self.process_completed_box()
         if len(self.current_box) > 4:
             self.current_box = []
+            self.canvas_box = []
 
     def process_completed_box(self):
         if self.yaml_loaded:
@@ -228,14 +231,20 @@ class Selection:
                 x_min, x_max = min(x_coords), max(x_coords)
                 y_min, y_max = min(y_coords), max(y_coords)
                 self.current_box = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
+                x_coords, y_coords = zip(*self.canvas_box)
+                x_min, x_max = min(x_coords), max(x_coords)
+                y_min, y_max = min(y_coords), max(y_coords)
+                self.canvas_box = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
             
             self.bounding_boxes.append((self.current_box, self.class_name))
-            self.draw_bounding_box(self.current_box, self.class_name)
+            self.draw_bounding_box(self.canvas_box, self.class_name)
             self.current_box = []
+            self.canvas_box = []
             if self.yaml_loaded:
-                self.class_combo.set('')  # Clear the combo box selection
+                self.class_combo.set(self.class_name)  # Clear the combo box selection
         else:
             self.current_box = []  # Reset the current box if no class name was provided
+            self.canvas_box = []
 
 
     def show_class_selection_window(self):        
