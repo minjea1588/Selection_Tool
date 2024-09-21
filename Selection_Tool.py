@@ -27,6 +27,10 @@ class Selection:
         self.draw_box_button.grid(row=0, column=4)
         self.tk.Button(button_frame, text="Load Classes", command=self.load_classes).grid(row=0, column=5)
         self.tk.Button(button_frame, text="Remove Last Box", command=self.remove_last_bounding_box).grid(row=0, column=6)
+        self.tk.Button(button_frame, text="Load JSON", command=self.load_json).grid(row=0, column=7)
+# New button for loading JSON
+        self.classes_loaded_label = self.tk.Label(button_frame, text="No classes file loaded", fg="red")
+        self.classes_loaded_label.grid(row=1, columnspan=8)
 
         # Initialize properties
         self.image_path = None
@@ -38,8 +42,9 @@ class Selection:
         self.img_width = 0
         self.img_height = 0
         self.draw_mode = False  # Initialize draw mode to False
+        self.isjsonload = False
         self.classes = []  # Initialize classes list
-        self.yaml_loaded = False  # Flag to track if YAML file is loaded
+        self.class_load = False  # Flag to track if YAML file is loaded
         self.class_colors = {}  # Dictionary to store class colors
 
 
@@ -49,7 +54,7 @@ class Selection:
         # Setup checkbox for rectangular mode
         self.rectangular_mode = tk.BooleanVar()
         self.rectangular_mode_checkbox = tk.Checkbutton(button_frame, text="Rectangular Mode", variable=self.rectangular_mode)
-        self.rectangular_mode_checkbox.grid(row=0, column=7)
+        self.rectangular_mode_checkbox.grid(row=0, column=8)
 
         # Constants
         self.canvas_width = 1280
@@ -101,6 +106,35 @@ class Selection:
         self.image = self.image.resize((self.canvas_width, self.canvas_height), Image.LANCZOS)
         self.reset_view()
 
+    def load_json(self):
+        
+        file_path = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json")])
+        if file_path:
+            try:
+                with open(file_path, 'r') as f:
+                    bounding_boxes_data = json.load(f)
+                
+                self.bounding_boxes = []
+                for box_data in bounding_boxes_data:
+                    points = box_data["points"]
+                    class_name = box_data["class"]
+                    
+                    # Convert points back to canvas coordinates
+                    canvas_points = []
+                    for x, y in points:
+                        canvas_x = x / (self.img_width / self.canvas_width)
+                        canvas_y = y / (self.img_height / self.canvas_height)
+                        canvas_points.append((canvas_x, canvas_y))
+                    self.class_colors[class_name] = self.get_random_color() ## class color를 미리 설정
+                    self.bounding_boxes.append((canvas_points, class_name))
+                self.isjsonload = True
+                self.refresh_image()
+                self.isjsonload = False
+                messagebox.showinfo("Success", "Bounding boxes loaded from JSON file")
+            except Exception as e:
+                self.isjsonload = False
+                messagebox.showerror("Error", f"Failed to load JSON: {e}")
+
     def reset_view(self):
         self.zoom_factor = 1.0
         self.zoom_x = 0
@@ -131,7 +165,7 @@ class Selection:
 
             self.canvas_image = ImageTk.PhotoImage(zoomed_image)
             self.canvas.config(width=self.canvas_width, height=self.canvas_height)
-            self.canvas.delete("all")
+            # self.canvas.delete("all")
             self.canvas.create_image(0, 0, anchor=self.tk.NW, image=self.canvas_image)
 
             # Redraw bounding boxes
@@ -214,7 +248,7 @@ class Selection:
             self.canvas_box = []
 
     def process_completed_box(self):
-        if self.yaml_loaded:
+        if self.class_load:
             self.show_class_selection_window()
             self.isfirst_combo = False
             self.master.wait_window(self.class_selection_window)
@@ -240,7 +274,7 @@ class Selection:
             self.draw_bounding_box(self.canvas_box, self.class_name)
             self.current_box = []
             self.canvas_box = []
-            if self.yaml_loaded:
+            if self.class_load:
                 self.class_combo.set(self.class_name)  # Clear the combo box selection
         else:
             self.current_box = []  # Reset the current box if no class name was provided
@@ -277,7 +311,8 @@ class Selection:
                     with open(file_path, "r") as file:
                         self.classes = [line.strip() for line in file.readlines()]
                 self.class_combo.config(values=self.classes)  # Update combo box with loaded classes
-                self.yaml_loaded = True  # Set the flag to indicate YAML or TXT file is loaded
+                self.class_load = True  # Set the flag to indicate YAML or TXT file is loaded
+                self.classes_loaded_label.config(text=f"Classes loaded from {file_path.split('/')[-1]}", fg="green")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load classes: {e}")
 
@@ -288,13 +323,19 @@ class Selection:
             x2, y2 = box[(i + 1) % 4]
 
             # Convert normalized coordinates to canvas coordinates
-            canvas_x1 = int((x1 * self.canvas_width - self.zoom_x) * self.zoom_factor)
-            canvas_y1 = int((y1 * self.canvas_height - self.zoom_y) * self.zoom_factor)
-            canvas_x2 = int((x2 * self.canvas_width - self.zoom_x) * self.zoom_factor)
-            canvas_y2 = int((y2 * self.canvas_height - self.zoom_y) * self.zoom_factor)
+            if self.isjsonload:
+                canvas_x1 = int(x1)
+                canvas_y1 = int(y1)
+                canvas_x2 = int(x2)
+                canvas_y2 = int(y2)
+            else:
+                canvas_x1 = int((x1 * self.canvas_width - self.zoom_x) * self.zoom_factor)
+                canvas_y1 = int((y1 * self.canvas_height - self.zoom_y) * self.zoom_factor)
+                canvas_x2 = int((x2 * self.canvas_width - self.zoom_x) * self.zoom_factor)
+                canvas_y2 = int((y2 * self.canvas_height - self.zoom_y) * self.zoom_factor)
 
             self.canvas.create_line(canvas_x1, canvas_y1, canvas_x2, canvas_y2, fill=color, width=2)
-
+        
         # Draw class name
         x, y = box[0]
         canvas_x = int((x * self.canvas_width - self.zoom_x) * self.zoom_factor)
