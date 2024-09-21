@@ -115,19 +115,24 @@ class Selection:
                 with open(file_path, 'r') as f:
                     bounding_boxes_data = json.load(f)
                 
-                self.bounding_boxes = []
+                self.save_bounding_boxes = []
+                self.canvas_bounding_boxes = []
                 for box_data in bounding_boxes_data:
                     points = box_data["points"]
                     class_name = box_data["class"]
                     
                     # Convert points back to canvas coordinates
+                    savebox_points = []
                     canvas_points = []
                     for x, y in points:
                         canvas_x = x / (self.img_width / self.canvas_width)
                         canvas_y = y / (self.img_height / self.canvas_height)
+                        savebox_points.append((x, y))
                         canvas_points.append((canvas_x, canvas_y))
                     self.class_colors[class_name] = self.get_random_color() ## class color를 미리 설정
-                    self.bounding_boxes.append((canvas_points, class_name))
+                    self.save_bounding_boxes.append((savebox_points, class_name))
+                    self.canvas_bounding_boxes.append((canvas_points, class_name))
+
                 self.isjsonload = True
                 self.refresh_image()
                 self.isjsonload = False
