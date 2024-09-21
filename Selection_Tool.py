@@ -36,16 +36,17 @@ class Selection:
         self.image_path = None
         self.image = None
         self.canvas_image = None
-        self.bounding_boxes = []
+        self.save_bounding_boxes = []
+        self.canvas_bounding_boxes = []
         self.current_box = []
         self.canvas_box = []
         self.img_width = 0
         self.img_height = 0
         self.draw_mode = False  # Initialize draw mode to False
-        self.isjsonload = False
-        self.classes = []  # Initialize classes list
         self.class_load = False  # Flag to track if YAML file is loaded
         self.class_colors = {}  # Dictionary to store class colors
+        self.isjsonload = False
+        self.classes = []  # Initialize classes list
 
 
         # Setup class combo box
@@ -165,11 +166,11 @@ class Selection:
 
             self.canvas_image = ImageTk.PhotoImage(zoomed_image)
             self.canvas.config(width=self.canvas_width, height=self.canvas_height)
-            # self.canvas.delete("all")
+            self.canvas.delete("all")
             self.canvas.create_image(0, 0, anchor=self.tk.NW, image=self.canvas_image)
 
             # Redraw bounding boxes
-            for box, class_name in self.bounding_boxes:
+            for box, class_name in self.canvas_bounding_boxes:
                 self.draw_bounding_box(box, class_name)
 
             self.canvas.pack(side=self.tk.BOTTOM)
@@ -270,7 +271,8 @@ class Selection:
                 y_min, y_max = min(y_coords), max(y_coords)
                 self.canvas_box = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
             
-            self.bounding_boxes.append((self.current_box, self.class_name))
+            self.save_bounding_boxes.append((self.current_box, self.class_name))
+            self.canvas_bounding_boxes.append((self.canvas_box, self.class_name))
             self.draw_bounding_box(self.canvas_box, self.class_name)
             self.current_box = []
             self.canvas_box = []
@@ -312,7 +314,6 @@ class Selection:
                         self.classes = [line.strip() for line in file.readlines()]
                 self.class_combo.config(values=self.classes)  # Update combo box with loaded classes
                 self.class_load = True  # Set the flag to indicate YAML or TXT file is loaded
-                self.classes_loaded_label.config(text=f"Classes loaded from {file_path.split('/')[-1]}", fg="green")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load classes: {e}")
 
@@ -322,7 +323,6 @@ class Selection:
             x1, y1 = box[i]
             x2, y2 = box[(i + 1) % 4]
 
-            # Convert normalized coordinates to canvas coordinates
             if self.isjsonload:
                 canvas_x1 = int(x1)
                 canvas_y1 = int(y1)
@@ -335,7 +335,7 @@ class Selection:
                 canvas_y2 = int((y2 * self.canvas_height - self.zoom_y) * self.zoom_factor)
 
             self.canvas.create_line(canvas_x1, canvas_y1, canvas_x2, canvas_y2, fill=color, width=2)
-        
+
         # Draw class name
         x, y = box[0]
         canvas_x = int((x * self.canvas_width - self.zoom_x) * self.zoom_factor)
@@ -343,8 +343,9 @@ class Selection:
         self.canvas.create_text(canvas_x, canvas_y-10, text=class_name, fill=color)
 
     def remove_last_bounding_box(self):
-        if self.bounding_boxes:
-            self.bounding_boxes.pop()
+        if self.save_bounding_boxes:
+            self.save_bounding_boxes.pop()
+            self.canvas_bounding_boxes.pop()
             self.refresh_image()
         else:
             messagebox.showwarning("Warning", "No bounding boxes to remove.")
@@ -354,7 +355,7 @@ class Selection:
         width_scaling_factor = self.img_width / canvas_width
         height_scaling_factor = self.img_height / canvas_height
         bounding_boxes_data = []
-        for box, class_name in self.bounding_boxes:
+        for box, class_name in self.save_bounding_boxes:
             rescaled_box = []
             for x, y in box:
                 rescaled_x = int(x * width_scaling_factor)
