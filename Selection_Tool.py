@@ -27,24 +27,20 @@ class Selection:
         self.draw_box_button.grid(row=0, column=4)
         self.tk.Button(button_frame, text="Load Classes", command=self.load_classes).grid(row=0, column=5)
         self.tk.Button(button_frame, text="Remove Last Box", command=self.remove_last_bounding_box).grid(row=0, column=6)
-        self.tk.Button(button_frame, text="Load JSON", command=self.load_json).grid(row=0, column=7)
-# New button for loading JSON
-        self.classes_loaded_label = self.tk.Label(button_frame, text="No classes file loaded", fg="red")
-        self.classes_loaded_label.grid(row=1, columnspan=8)
 
         # Initialize properties
         self.image_path = None
         self.image = None
         self.canvas_image = None
-        self.bounding_boxes = []
+        self.save_bounding_boxes = []
+        self.canvas_bounding_boxes = []
         self.current_box = []
         self.canvas_box = []
         self.img_width = 0
         self.img_height = 0
         self.draw_mode = False  # Initialize draw mode to False
-        self.isjsonload = False
         self.classes = []  # Initialize classes list
-        self.class_load = False  # Flag to track if YAML file is loaded
+        self.yaml_loaded = False  # Flag to track if YAML file is loaded
         self.class_colors = {}  # Dictionary to store class colors
 
 
@@ -54,7 +50,7 @@ class Selection:
         # Setup checkbox for rectangular mode
         self.rectangular_mode = tk.BooleanVar()
         self.rectangular_mode_checkbox = tk.Checkbutton(button_frame, text="Rectangular Mode", variable=self.rectangular_mode)
-        self.rectangular_mode_checkbox.grid(row=0, column=8)
+        self.rectangular_mode_checkbox.grid(row=0, column=7)
 
         # Constants
         self.canvas_width = 1280
@@ -106,35 +102,6 @@ class Selection:
         self.image = self.image.resize((self.canvas_width, self.canvas_height), Image.LANCZOS)
         self.reset_view()
 
-    def load_json(self):
-        
-        file_path = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json")])
-        if file_path:
-            try:
-                with open(file_path, 'r') as f:
-                    bounding_boxes_data = json.load(f)
-                
-                self.bounding_boxes = []
-                for box_data in bounding_boxes_data:
-                    points = box_data["points"]
-                    class_name = box_data["class"]
-                    
-                    # Convert points back to canvas coordinates
-                    canvas_points = []
-                    for x, y in points:
-                        canvas_x = x / (self.img_width / self.canvas_width)
-                        canvas_y = y / (self.img_height / self.canvas_height)
-                        canvas_points.append((canvas_x, canvas_y))
-                    self.class_colors[class_name] = self.get_random_color() ## class color를 미리 설정
-                    self.bounding_boxes.append((canvas_points, class_name))
-                self.isjsonload = True
-                self.refresh_image()
-                self.isjsonload = False
-                messagebox.showinfo("Success", "Bounding boxes loaded from JSON file")
-            except Exception as e:
-                self.isjsonload = False
-                messagebox.showerror("Error", f"Failed to load JSON: {e}")
-
     def reset_view(self):
         self.zoom_factor = 1.0
         self.zoom_x = 0
@@ -165,11 +132,11 @@ class Selection:
 
             self.canvas_image = ImageTk.PhotoImage(zoomed_image)
             self.canvas.config(width=self.canvas_width, height=self.canvas_height)
-            # self.canvas.delete("all")
+            self.canvas.delete("all")
             self.canvas.create_image(0, 0, anchor=self.tk.NW, image=self.canvas_image)
 
             # Redraw bounding boxes
-            for box, class_name in self.bounding_boxes:
+            for box, class_name in self.canvas_bounding_boxes:
                 self.draw_bounding_box(box, class_name)
 
             self.canvas.pack(side=self.tk.BOTTOM)
@@ -248,7 +215,7 @@ class Selection:
             self.canvas_box = []
 
     def process_completed_box(self):
-        if self.class_load:
+        if self.yaml_loaded:
             self.show_class_selection_window()
             self.isfirst_combo = False
             self.master.wait_window(self.class_selection_window)
@@ -270,11 +237,12 @@ class Selection:
                 y_min, y_max = min(y_coords), max(y_coords)
                 self.canvas_box = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
             
-            self.bounding_boxes.append((self.current_box, self.class_name))
+            self.save_bounding_boxes.append((self.current_box, self.class_name))
+            self.canvas_bounding_boxes.append((self.canvas_box, self.class_name))
             self.draw_bounding_box(self.canvas_box, self.class_name)
             self.current_box = []
             self.canvas_box = []
-            if self.class_load:
+            if self.yaml_loaded:
                 self.class_combo.set(self.class_name)  # Clear the combo box selection
         else:
             self.current_box = []  # Reset the current box if no class name was provided
@@ -311,8 +279,7 @@ class Selection:
                     with open(file_path, "r") as file:
                         self.classes = [line.strip() for line in file.readlines()]
                 self.class_combo.config(values=self.classes)  # Update combo box with loaded classes
-                self.class_load = True  # Set the flag to indicate YAML or TXT file is loaded
-                self.classes_loaded_label.config(text=f"Classes loaded from {file_path.split('/')[-1]}", fg="green")
+                self.yaml_loaded = True  # Set the flag to indicate YAML or TXT file is loaded
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load classes: {e}")
 
@@ -323,19 +290,13 @@ class Selection:
             x2, y2 = box[(i + 1) % 4]
 
             # Convert normalized coordinates to canvas coordinates
-            if self.isjsonload:
-                canvas_x1 = int(x1)
-                canvas_y1 = int(y1)
-                canvas_x2 = int(x2)
-                canvas_y2 = int(y2)
-            else:
-                canvas_x1 = int((x1 * self.canvas_width - self.zoom_x) * self.zoom_factor)
-                canvas_y1 = int((y1 * self.canvas_height - self.zoom_y) * self.zoom_factor)
-                canvas_x2 = int((x2 * self.canvas_width - self.zoom_x) * self.zoom_factor)
-                canvas_y2 = int((y2 * self.canvas_height - self.zoom_y) * self.zoom_factor)
+            canvas_x1 = int((x1 * self.canvas_width - self.zoom_x) * self.zoom_factor)
+            canvas_y1 = int((y1 * self.canvas_height - self.zoom_y) * self.zoom_factor)
+            canvas_x2 = int((x2 * self.canvas_width - self.zoom_x) * self.zoom_factor)
+            canvas_y2 = int((y2 * self.canvas_height - self.zoom_y) * self.zoom_factor)
 
             self.canvas.create_line(canvas_x1, canvas_y1, canvas_x2, canvas_y2, fill=color, width=2)
-        
+
         # Draw class name
         x, y = box[0]
         canvas_x = int((x * self.canvas_width - self.zoom_x) * self.zoom_factor)
@@ -343,8 +304,9 @@ class Selection:
         self.canvas.create_text(canvas_x, canvas_y-10, text=class_name, fill=color)
 
     def remove_last_bounding_box(self):
-        if self.bounding_boxes:
-            self.bounding_boxes.pop()
+        if self.save_bounding_boxes:
+            self.save_bounding_boxes.pop()
+            self.canvas_bounding_boxes.pop()
             self.refresh_image()
         else:
             messagebox.showwarning("Warning", "No bounding boxes to remove.")
@@ -354,7 +316,7 @@ class Selection:
         width_scaling_factor = self.img_width / canvas_width
         height_scaling_factor = self.img_height / canvas_height
         bounding_boxes_data = []
-        for box, class_name in self.bounding_boxes:
+        for box, class_name in self.save_bounding_boxes:
             rescaled_box = []
             for x, y in box:
                 rescaled_x = int(x * width_scaling_factor)
