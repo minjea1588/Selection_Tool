@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 7
+names: ['battery', 'beeper', 'led', 'sd_card', 'spring', 'uart', 'usb_c']
+
+roboflow:
+  workspace: stvision
+  project: cpcm_seg
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/stvision/cpcm_seg/dataset/2
