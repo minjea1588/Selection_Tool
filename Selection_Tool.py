@@ -319,6 +319,7 @@ class Selection:
                         self.classes = [line.strip() for line in file.readlines()]
                 self.class_combo.config(values=self.classes)  # Update combo box with loaded classes
                 self.class_load = True  # Set the flag to indicate YAML or TXT file is loaded
+                self.classes_loaded_label.config(text=f"Classes loaded from {file_path.split('/')[-1]}", fg="green")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load classes: {e}")
 
